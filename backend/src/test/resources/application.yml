@@ -1,0 +1,44 @@
+# Configuração dos testes: H2 em memória + Flyway (mesmo esquema da migração)
+spring:
+  application:
+    name: flowtask-api-test
+  datasource:
+    url: jdbc:h2:mem:flowtask_it;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: none # o esquema é gerido pelo Flyway
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        order_updates: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jackson:
+    default-property-inclusion: non_null
+
+app:
+  seguranca:
+    jwt:
+      # Segredo fixo de teste (base64 de 96 bytes). Nunca usar em produção.
+      segredo: c3Blcm1lZGFuLWp3dC1zZWdyZWRvLWRlLWRldi0zMi1ieXRlcy1iYXNlNjQtcXVlLW5hby11cy1wcm9kLWluZG8tdXNlLXNlZ3JlZG8tdGl0dWxhci1kZS1kZXZlbg==
+      expiracao-segundos: 3600
+    cors:
+      origens: http://localhost:4200
+    senhas:
+      padrao: "^(?=.*[A-Za-z])(?=.*\\d).{8,64}$"
+      mensagem: "A senha deve ter de 8 a 64 caracteres, incluindo pelo menos 1 letra e 1 número."
+  convites:
+    expiracao-dias: 7
+  email:
+    habilitado: false
+    remetente: flowtask@localhost
+
+logging:
+  level:
+    org.springframework.security: WARN

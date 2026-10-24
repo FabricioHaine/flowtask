@@ -1,0 +1,21 @@
+# Backend
+backend/target/
+backend/.flattened-pom.xml
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/out-tsc/
+frontend/.angular/
+frontend/coverage/
+
+# Local (nunca comitar)
+.env
+*.local
+
+# Sistema / editor
+*.log
+Thumbs.db
+.DS_Store
+.idea/
+.vscode/

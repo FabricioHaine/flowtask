@@ -1,0 +1,46 @@
+package com.flowtask.dominio;
+
+/**
+ * Tipos de eventos registrados na trilha de atividades (tabela atividades.coluna tipo).
+ */
+public enum TipoAtividade {
+    // Projeto
+    PROJETO_CRIADO,
+    PROJETO_ATUALIZADO,
+    PROJETO_ESTADO_ALTERADO,
+    PROPRIEDADE_TRANSFERIDA,
+
+    // Integrantes e convites
+    CONVITE_ENVIADO,
+    CONVITE_ACEITO,
+    CONVITE_RECUSADO,
+    CONVITE_CANCELADO,
+    MEMBRO_ADICIONADO,
+    MEMBRO_REMOVIDO,
+    FUNCAO_ALTERADA,
+
+    // Quadro kanban
+    COLUNA_CRIADA,
+    COLUNA_RENOMEADA,
+    COLUNA_REORDENADA,
+    COLUNA_ARQUIVADA,
+    COLUNA_REMOVIDA,
+
+    // Tarefas
+    TAREFA_CRIADA,
+    TAREFA_ATUALIZADA,
+    TAREFA_ATRIBUIDA,
+    TAREFA_MOVIDA,
+    TAREFA_PRIORIDADE_ALTERADA,
+    TAREFA_PRAZO_ALTERADO,
+    TAREFA_ETIQUETAS_ALTERADAS,
+    TAREFA_ARQUIVADA,
+    TAREFA_CONCLUIDA,
+    TAREFA_REABERTA,
+    TAREFA_REMOVIDA,
+
+    // Etiquetas e comentários
+    COMENTARIO_CRIADO,
+    COMENTARIO_EDITADO,
+    COMENTARIO_REMOVIDO
+}
