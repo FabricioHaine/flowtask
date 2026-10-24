@@ -8,6 +8,16 @@ Plataforma full-stack de gestão de projetos e equipes com quadro **Kanban**, co
 
 O acesso ao quadro é sempre decidido **no backend**: um usuário sem vínculo com o projeto recebe `404`, quem tem vínculo mas papel insuficiente recebe `403`. O histórico grava sempre o **ator autenticado**, nunca dados do cliente.
 
+## Telas
+
+| | |
+| --- | --- |
+| ![Quadro Kanban](docs/capturas/quadro.png) | ![Projetos](docs/capturas/projetos.png) |
+| ![Dashboard](docs/capturas/painel.png) | ![Equipe](docs/capturas/equipe.png) |
+| ![Entrar](docs/capturas/entrar.png) | ![Exclusão de projeto](docs/capturas/modal-exclusao.png) |
+
+Mais capturas (versões mobile, notificações e minhas tarefas) em [`docs/capturas/`](docs/capturas).
+
 ---
 
 ## Funcionalidades
@@ -21,6 +31,7 @@ O acesso ao quadro é sempre decidido **no backend**: um usuário sem vínculo c
 | Equipe | Convite por e-mail (exige conta com o mesmo e-mail para aceitar; expira em 7 dias), troca de função, remoção e **transferência de propriedade** |
 | Colaboração | Comentários (editar/apagar os próprios; OWNER pode apagar qualquer), etiquetas com cor #RRGGBB, histórico por projeto e por tarefa |
 | Notificações | Sino com contagem de não lidas; eventos de atribuição, prazo, prioridade, concluída, convite aceito/recusado, removido, reaberta, estado do projeto, transferência |
+| Exclusão de projeto | `DELETE /api/projects/{id}`, exclusivamente OWNER, com confirmação que exige digitar o nome; cascata (colunas, tarefas, comentários, etiquetas, convites, membros, atividades, notificações) em uma única transação |
 | Dashboard | Projetos ativos, tarefas abertas/em andamento/atrasadas/concluídas no período (7/30/90 dias), distribuição por coluna e por prioridade, carga por responsável, prazos próximos (15 dias), atividade recente |
 | Concorrência | Movimentação de tarefa com `SELECT … FOR UPDATE` (lock pessimista) + `@Version` → `409` no TratadorExcecoes |
 
@@ -43,7 +54,7 @@ CREATE ROLE flowtask LOGIN PASSWORD 'flowtask';
 CREATE DATABASE flowtask OWNER flowtask;
 ```
 
-O esquema é criado automaticamente pelo **Flyway** (`V1__esquema_flowtask.sql`, `V2__dados_iniciais`) no primeiro boot.
+O esquema é criado automaticamente pelo **Flyway** (`V1__esquema_flowtask.sql`) no primeiro boot.
 
 ## Backend
 
@@ -56,7 +67,7 @@ cd backend
 mvn spring-boot:run   # http://localhost:8080  (Swagger: /swagger-ui.html)
 ```
 
-Testes do backend (47 testes, incluindo integração com H2 em modo PostgreSQL+Flyway+MockMvc):
+Testes do backend (52 testes, incluindo integração com H2 em modo PostgreSQL+Flyway+MockMvc):
 
 ```bash
 mvn test
@@ -86,12 +97,21 @@ npm run build
 3. Crie um projeto; a tela do quadro aparece com 4 colunas padrão.
 4. "Tokens/Equipe" (`/projetos/:id/equipe`) → convide um e-mail cadastrado e teste aceitar/recusar na tela de Notificações do outro usuário.
 
+## Scripts auxiliares
+
+| Script | Uso |
+| --- | --- |
+| `scripts/criar-banco.sql` | Cria o papel e o banco `flowtask` no PostgreSQL |
+| `scripts/smoke-e2e.ps1` | Suíte de fumaça da API (33 verificações: autenticação, papéis, quadro, tarefas, convites, dashboard) |
+| `scripts/smoke-delete.ps1` | Suíte da exclusão de projeto (9 verificações: `204` OWNER, `403` membro, `404` forasteiro, cascata e remoção da listagem) |
+| `scripts/captura-cdp.mjs` | Captura telas via Chrome DevTools Protocol (gera os PNGs de `docs/capturas/`) |
+
 ## Papéis e rotas principais (resumo)
 
 | Recurso | Rotas |
 | --- | --- |
 | Auth | `POST /api/auth/register`, `POST /api/auth/login`, `GET/PUT /api/auth/me` |
-| Projetos | `GET/POST /api/projects`, `GET/PUT /api/projects/{id}`, `PATCH /api/projects/{id}/status` |
+| Projetos | `GET/POST /api/projects`, `GET/PUT/DELETE /api/projects/{id}`, `PATCH /api/projects/{id}/status` |
 | Quadro | `GET /api/projects/{id}/board`, `GET/POST /api/projects/{id}/columns`, `PUT/PATCH/DELETE …/columns/{id}`, `PATCH …/columns/reorder`, `PATCH …/columns/{id}/archive` |
 | Tarefas | `POST/GET /api/projects/{id}/tasks`, `GET /api/tasks/me`, `GET/PUT/DELETE /api/tasks/{id}`, `PATCH …/move`, `…/assignee`, `…/priority`, `…/due-date`, `…/labels`, `…/archive` |
 | Colaboração | `GET/POST /api/tasks/{id}/comments`, `PUT/DELETE /api/comments/{id}`, `GET/POST/PUT/DELETE /api/projects/{id}/labels` |
