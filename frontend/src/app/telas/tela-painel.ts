@@ -1,12 +1,16 @@
-/** Painel do usuário: indicadores, gráficos CSS e atividade recente. */
+/** Painel do usuário: saudação, indicadores, distribuição de tarefas e atividade. */
 
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
 import { ApiServico } from '../core/api';
+import { AuthStore } from '../core/auth.store';
 import { ResumoUsuario } from '../core/models';
-import { ROTULO_PRIORIDADE, formatarDataHora, formatarDataLocal, iniciais } from '../core/utilidades';
+import {
+  ROTULO_PRIORIDADE, formatarDataHora, formatarDataLocal, iniciais,
+  iconeAtividade, tonoAtividade,
+} from '../core/utilidades';
 import { ServicoToast, mensagemDeErro } from '../core/toast.service';
 
 @Component({
@@ -16,48 +20,94 @@ import { ServicoToast, mensagemDeErro } from '../core/toast.service';
   template: `
     <div class="pagina">
       <div class="cabeca-pagina">
-        <h1>Painel</h1>
-        <label class="campo horizontal">
-          Período
-          <select class="input pequeno" [(ngModel)]="periodo" name="periodo" (ngModelChange)="carregar()">
-            <option [ngValue]="7">Últimos 7 dias</option>
-            <option [ngValue]="30">Últimos 30 dias</option>
-            <option [ngValue]="90">Últimos 90 dias</option>
-          </select>
-        </label>
+        <div>
+          <p class="rotulo-secao">Visão geral</p>
+          <h1 class="titulo-pagina">{{ saudacao() }}{{ nome_() ? ', ' + nome_() : '' }}</h1>
+              <span class="descricao-pagina" style="margin-top: 2px;">O resumo do seu trabalho nos últimos dias.</span>
+        </div>
+        <div class="acoes-cab">
+          <label class="campo horizontal">
+            Período
+            <select class="input pequeno" [(ngModel)]="periodo" name="periodo" (ngModelChange)="carregar()"
+                    style="width: 170px;">
+              <option [ngValue]="7">Últimos 7 dias</option>
+              <option [ngValue]="30">Últimos 30 dias</option>
+              <option [ngValue]="90">Últimos 90 dias</option>
+            </select>
+          </label>
+          <button class="btn ghost ic" type="button" (click)="carregar()"
+                  title="Atualizar" aria-label="Atualizar painel">
+            <i class="pi pi-refresh"></i>
+          </button>
+        </div>
       </div>
 
       @if (carregando()) {
-        <p class="mensagem-info">Calculando indicadores…</p>
+        <div class="grade-kpi" aria-hidden="true">
+          @for (f of [1, 2, 3, 4, 5]; track f) {
+            <div class="kpi card">
+              <div class="sk sk-linha" style="width: 70%;"></div>
+              <div class="sk sk-linha gorda" style="width: 40%;"></div>
+            </div>
+          }
+        </div>
+        <div class="grade-dash">
+          <div class="painel-card card">
+            <div class="sk sk-linha gorda" style="width: 30%;"></div>
+            @for (f of [1, 2, 3, 4]; track f) {
+              <div class="sk sk-linha" style="width: 90%;"></div>
+            }
+          </div>
+          <div class="painel-card card">
+            <div class="sk sk-linha gorda" style="width: 40%;"></div>
+            @for (f of [1, 2, 3, 4]; track f) {
+              <div class="sk sk-linha" style="width: 85%;"></div>
+            }
+          </div>
+        </div>
+      } @else if (erroCarregamento()) {
+        <div class="vazio">
+          <span class="ic-vazio"><i class="pi pi-exclamation-triangle"></i></span>
+          <h3>Não foi possível carregar o painel</h3>
+          <p>{{ erroCarregamento() }}</p>
+          <div class="acoes-vazio">
+            <button class="btn soft" type="button" (click)="carregar()">
+              <i class="pi pi-refresh"></i> Tentar de novo
+            </button>
+          </div>
+        </div>
       } @else if (resumo(); as r) {
-        <div class="linha-indicadores">
-          <div class="card indicador">
-            <small>Projetos ativos</small>
-            <b>{{ r.projetosAtivos }}</b>
+        <div class="grade-kpi">
+          <div class="kpi card tono-azul">
+            <div class="kpi-topo"><span class="kpi-ic"><i class="pi pi-objects-column"></i></span><small>Projetos ativos</small></div>
+            <span class="kpi-valor">{{ r.projetosAtivos }}</span>
           </div>
-          <div class="card indicador">
-            <small>Tarefas abertas</small>
-            <b>{{ r.tarefasAbertas }}</b>
+          <div class="kpi card tono-azul">
+            <div class="kpi-topo"><span class="kpi-ic"><i class="pi pi-list"></i></span><small>Tarefas abertas</small></div>
+            <span class="kpi-valor">{{ r.tarefasAbertas }}</span>
           </div>
-          <div class="card indicador">
-            <small>Em andamento</small>
-            <b>{{ r.tarefasEmAndamento }}</b>
+          <div class="kpi card tono-azul">
+            <div class="kpi-topo"><span class="kpi-ic"><i class="pi pi-directions"></i></span><small>Em andamento</small></div>
+            <span class="kpi-valor">{{ r.tarefasEmAndamento }}</span>
           </div>
-          <div class="card indicador">
-            <small>Atrasadas</small>
-            <b class="vermelho">{{ r.tarefasAtrasadas }}</b>
+          <div class="kpi card tono-vermelho">
+            <div class="kpi-topo"><span class="kpi-ic"><i class="pi pi-exclamation-triangle"></i></span><small>Atrasadas</small></div>
+            <span class="kpi-valor">{{ r.tarefasAtrasadas }}</span>
+            <span class="kpi-nota">{{ r.tarefasAtrasadas > 0 ? 'merecem atenção hoje' : 'tudo em dia' }}</span>
           </div>
-          <div class="card indicador">
-            <small>Concluídas no período</small>
-            <b class="verde">{{ r.tarefasConcluidasPeriodo }}</b>
+          <div class="kpi card tono-menta">
+            <div class="kpi-topo"><span class="kpi-ic"><i class="pi pi-check-circle"></i></span><small>Concluídas no período</small></div>
+            <span class="kpi-valor">{{ r.tarefasConcluidasPeriodo }}</span>
           </div>
         </div>
 
-        <div class="grade-painel">
-          <section class="partPainel card">
-            <h2>Por coluna</h2>
+        <div class="grade-dash">
+          <section class="painel-card card">
+            <div class="cabeca-painel"><i class="pi pi-objects-column"></i><h2>Distribuição das tarefas</h2></div>
+
+            <span class="rotulo-secao">Por coluna</span>
             @if (barrasColuna().length === 0) {
-              <p class="mensagem-info">Sem dados.</p>
+              <p class="mensagem-info">Crie tarefas em um projeto para ver a distribuição.</p>
             }
             @for (c of barrasColuna(); track c.nome) {
               <div class="barra-qtd">
@@ -67,21 +117,21 @@ import { ServicoToast, mensagemDeErro } from '../core/toast.service';
               </div>
             }
 
-            <h2>Por prioridade</h2>
+            <span class="rotulo-secao" style="margin-top: 6px;">Por prioridade</span>
             @if (barrasPrioridade().length === 0) {
-              <p class="mensagem-info">Sem dados.</p>
+              <p class="mensagem-info">Sem tarefas priorizadas no período.</p>
             }
             @for (p of barrasPrioridade(); track p.nome) {
               <div class="barra-qtd">
                 <span class="nome">{{ p.nome }}</span>
-                <div class="trilho"><i [style.width.%]="p.pct"></i></div>
+                <div class="trilho" [class.ambar]="p.nome === 'Alta'" [class.menta]="p.nome === 'Baixa'"><i [style.width.%]="p.pct"></i></div>
                 <span class="qtd">{{ p.valor }}</span>
               </div>
             }
           </section>
 
-          <section class="partPainel card">
-            <h2>Carga por responsável</h2>
+          <section class="painel-card card">
+            <div class="cabeca-painel"><i class="pi pi-users"></i><h2>Carga por responsável</h2></div>
             @if (r.porResponsavel.length === 0) {
               <p class="mensagem-info">Nenhuma tarefa atribuída neste período.</p>
             }
@@ -93,18 +143,16 @@ import { ServicoToast, mensagemDeErro } from '../core/toast.service';
                   <small>{{ c.atribuidas }} abertas · {{ c.concluidas }} concluídas · {{ c.atrasadas }} atrasadas</small>
                 </div>
                 <span class="energia">
-                  <span class="badge media">{{ c.atribuidas }} abertas</span>
                   @if (c.atrasadas > 0) {
                     <span class="badge perigo">{{ c.atrasadas }} atrasadas</span>
-                  }
-                  @if (c.concluidas > 0) {
-                    <span class="badge sucesso">{{ c.concluidas }} ✓</span>
+                  } @else {
+                    <span class="badge sucesso">em dia</span>
                   }
                 </span>
               </div>
             }
 
-            <h2 style="margin-top:14px">Projetos próximos do prazo</h2>
+            <div class="cabeca-painel" style="margin-top: 8px;"><i class="pi pi-calendar"></i><h2>Projetos próximos do prazo</h2></div>
             @if (r.projetosProximosDoPrazo.length === 0) {
               <p class="mensagem-info">Sem prazos nos próximos 15 dias.</p>
             }
@@ -113,9 +161,9 @@ import { ServicoToast, mensagemDeErro } from '../core/toast.service';
                 <a [routerLink]="['/projetos', p.id]">{{ p.nome }}</a>
                 @if (p.prazoFinal !== null) {
                   <span class="fim-linha">
-                    <small>{{ dataLocal_(p.prazoFinal) }}</small>
+                    <span class="chip-prazo"><i class="pi pi-calendar"></i> {{ dataLocal_(p.prazoFinal) }}</span>
                     @if (p.progressoPct !== null) {
-                      <span class="progresso mini"><span [style.width.%]="p.progressoPct"></span></span>
+                      <span class="progresso mini" [title]="p.progressoPct + '% concluído'"><span [style.width.%]="p.progressoPct"></span></span>
                     }
                   </span>
                 }
@@ -123,33 +171,47 @@ import { ServicoToast, mensagemDeErro } from '../core/toast.service';
             }
           </section>
 
-          <section class="partPainel card span-2">
-            <h2>Atividade recente</h2>
+          <section class="painel-card card span-2">
+            <div class="cabeca-painel"><i class="pi pi-history"></i><h2>Atividade recente</h2></div>
             @if (r.atividadeRecente.length === 0) {
-              <p class="mensagem-info">Nada registrado no período.</p>
+              <div class="vazio" style="padding: 26px;">
+                <span class="ic-vazio"><i class="pi pi-history"></i></span>
+                <h3>Nada aconteceu ainda</h3>
+                <p>As ações dos integrantes dos seus projetos aparecem aqui, em ordem cronológica.</p>
+              </div>
             }
             @for (a of fatiaAtividade(); track a.id) {
-              <p class="linha-atividade">
-                <small>
-                  {{ datahora_(a.criadoEm) }} · <b>{{ a.usuario?.nome ?? 'Sistema' }}</b> — {{ a.resumo }}
+              <div class="local-ativ">
+                <span class="ativ-ic {{ tonoDe(a.tipo) }}"><i class="pi {{ iconeDe(a.tipo) }}"></i></span>
+                <span class="txt-ativ">
+                  <b>{{ a.usuario?.nome ?? 'Sistema' }}</b> — {{ a.resumo }}
                   @if (a.entidade === 'projeto') {
                     <a [routerLink]="['/projetos', a.entidadeId]">ver projeto</a>
                   }
-                </small>
-              </p>
+                </span>
+                <small class="quando">{{ datahora_(a.criadoEm) }}</small>
+              </div>
             }
           </section>
         </div>
       }
     </div>
   `,
+  styles: `
+    .local-ativ { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0;
+      .txt-ativ { flex: 1; font-size: 12.5px; color: var(--ft-text-2); line-height: 1.5;
+        b { color: var(--ft-text); } a { margin-left: 6px; font-size: 12px; } }
+      .quando { color: var(--ft-text-3); font-size: 11px; white-space: nowrap; padding-top: 2px; } }
+  `,
 })
 export class TelaPainel implements OnInit {
   private readonly api = inject(ApiServico);
   private readonly toast = inject(ServicoToast);
+  readonly auth = inject(AuthStore);
 
   readonly resumo = signal<ResumoUsuario | null>(null);
   readonly carregando = signal(true);
+  readonly erroCarregamento = signal<string | null>(null);
 
   periodo: number | null = 30;
 
@@ -159,6 +221,7 @@ export class TelaPainel implements OnInit {
 
   carregar(): void {
     this.carregando.set(true);
+    this.erroCarregamento.set(null);
     this.api.resumoDashboard(this.periodo === null ? 30 : this.periodo).subscribe({
       next: r => {
         this.resumo.set(r);
@@ -166,14 +229,38 @@ export class TelaPainel implements OnInit {
       },
       error: erro => {
         this.carregando.set(false);
+        this.erroCarregamento.set(mensagemDeErro(erro));
         this.toast.erro(mensagemDeErro(erro));
       },
     });
   }
 
+  saudacao(): string {
+    const hora = new Date().getHours();
+    if (hora < 12) {
+      return 'Bom dia';
+    }
+    if (hora < 18) {
+      return 'Boa tarde';
+    }
+    return 'Boa noite';
+  }
+
+  nome_(): string | null {
+    return this.auth.usuario()?.nome ?? null;
+  }
+
   /** Primeiras atividades para a listagem compacta. */
   fatiaAtividade() {
     return this.resumo()?.atividadeRecente.slice(0, 12) ?? [];
+  }
+
+  iconeDe(tipo: string): string {
+    return iconeAtividade(tipo);
+  }
+
+  tonoDe(tipo: string): string {
+    return tonoAtividade(tipo);
   }
 
   rotuloPrioridade(chave: string): string {

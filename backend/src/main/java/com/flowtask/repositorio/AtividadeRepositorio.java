@@ -48,4 +48,9 @@ public interface AtividadeRepositorio extends JpaRepository<Atividade, Long> {
             order by a.criadoEm desc, a.id desc
             """)
     List<Atividade> listarRecentesDoUsuario(@Param("usuarioId") Long usuarioId, Pageable pageable);
+
+    /** Exclusão em lote das atividades de um projeto (exclusão do projeto). */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("delete from Atividade a where a.projeto.id = :projetoId")
+    long excluirPorProjeto(@Param("projetoId") Long projetoId);
 }

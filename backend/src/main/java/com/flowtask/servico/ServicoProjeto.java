@@ -23,10 +23,14 @@ import com.flowtask.dominio.Usuario;
 import com.flowtask.dto.ProjetoDtos;
 import com.flowtask.dto.UsuarioResumo;
 import com.flowtask.excecao.RegraNegocioException;
+import com.flowtask.repositorio.AtividadeRepositorio;
 import com.flowtask.repositorio.ColunaRepositorio;
 import com.flowtask.repositorio.ContagemTarefasProjeto;
+import com.flowtask.repositorio.ConviteRepositorio;
 import com.flowtask.repositorio.MembroProjetoRepositorio;
+import com.flowtask.repositorio.NotificacaoRepositorio;
 import com.flowtask.repositorio.ProjetoRepositorio;
+import com.flowtask.repositorio.TarefaRepositorio;
 
 /**
  * Regras de negócio de projetos: criação (com colunas padrão), listagem
@@ -40,17 +44,29 @@ public class ServicoProjeto {
     private final ProjetoRepositorio projetoRepositorio;
     private final MembroProjetoRepositorio membroRepositorio;
     private final ColunaRepositorio colunaRepositorio;
+    private final TarefaRepositorio tarefaRepositorio;
+    private final NotificacaoRepositorio notificacaoRepositorio;
+    private final ConviteRepositorio conviteRepositorio;
+    private final AtividadeRepositorio atividadeRepositorio;
     private final VerificadorAcesso verificador;
     private final ServicoAtividade servicoAtividade;
 
     public ServicoProjeto(ProjetoRepositorio projetoRepositorio,
                           MembroProjetoRepositorio membroRepositorio,
                           ColunaRepositorio colunaRepositorio,
+                          TarefaRepositorio tarefaRepositorio,
+                          NotificacaoRepositorio notificacaoRepositorio,
+                          ConviteRepositorio conviteRepositorio,
+                          AtividadeRepositorio atividadeRepositorio,
                           VerificadorAcesso verificador,
                           ServicoAtividade servicoAtividade) {
         this.projetoRepositorio = projetoRepositorio;
         this.membroRepositorio = membroRepositorio;
         this.colunaRepositorio = colunaRepositorio;
+        this.tarefaRepositorio = tarefaRepositorio;
+        this.notificacaoRepositorio = notificacaoRepositorio;
+        this.conviteRepositorio = conviteRepositorio;
+        this.atividadeRepositorio = atividadeRepositorio;
         this.verificador = verificador;
         this.servicoAtividade = servicoAtividade;
     }
@@ -207,6 +223,24 @@ public class ServicoProjeto {
         // Histórico registra a mudança; convites e quadro continuam acessíveis,
         // movimentações são bloqueadas apenas para projetos arquivados (verificado nas tarefas).
         return resposta(projeto, PapelProjeto.OWNER, null);
+    }
+
+    /**
+     * Exclui o projeto permanentemente (somente OWNER). Remove em ordem que
+     * respeita as FKs sem CASCADE: tarefas, notificações, convites, membros
+     * e atividades; colunas e etiquetas são removidas pelo CASCADE do projeto.
+     */
+    @Transactional
+    public void excluir(Long projetoId, Usuario ator) {
+        verificador.exigirPapel(projetoId, ator, PapelProjeto.OWNER);
+        Projeto projeto = verificador.projetoPorId(projetoId);
+
+        tarefaRepositorio.excluirPorProjeto(projetoId);      // comentários/vínculos cascaram no banco
+        notificacaoRepositorio.excluirPorProjeto(projetoId);
+        conviteRepositorio.excluirPorProjeto(projetoId);
+        membroRepositorio.excluirPorProjeto(projetoId);
+        atividadeRepositorio.excluirPorProjeto(projetoId);
+        projetoRepositorio.delete(projeto);                   // colunas/etiquetas cascaram no banco
     }
 
     // ---------------------------------------------------------------- helpers

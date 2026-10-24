@@ -26,4 +26,9 @@ public interface NotificacaoRepositorio extends JpaRepository<Notificacao, Long>
     @Modifying
     @Query("update Notificacao n set n.lida = true where n.destinatario.id = :usuarioId and n.lida = false")
     int marcarTodasComoLidas(@Param("usuarioId") Long usuarioId);
+
+    /** Exclusão em lote das notificações de um projeto (exclusão do projeto). */
+    @Modifying
+    @Query("delete from Notificacao n where n.projeto.id = :projetoId")
+    long excluirPorProjeto(@Param("projetoId") Long projetoId);
 }

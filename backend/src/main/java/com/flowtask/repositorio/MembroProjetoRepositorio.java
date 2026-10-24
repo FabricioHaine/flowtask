@@ -53,4 +53,9 @@ public interface MembroProjetoRepositorio extends JpaRepository<MembroProjeto, L
                                                          @Param("hoje") java.time.LocalDate hoje);
 
     boolean existsByIdAndUsuarioId(Long id, Long usuarioId);
+
+    /** Exclusão em lote dos vínculos de integrantes de um projeto (exclusão do projeto). */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("delete from MembroProjeto m where m.projeto.id = :projetoId")
+    long excluirPorProjeto(@Param("projetoId") Long projetoId);
 }

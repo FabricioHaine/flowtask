@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -101,4 +102,9 @@ public interface TarefaRepositorio extends JpaRepository<Tarefa, Long> {
               and t.arquivada = false
             """)
     List<Tarefa> listarAtivasSemColuna(@Param("projetoId") Long projetoId);
+
+    /** Exclusão em lote das tarefas de um projeto; comentários e vínculos cascaram no banco. */
+    @Modifying
+    @Query("delete from Tarefa t where t.projeto.id = :projetoId")
+    long excluirPorProjeto(@Param("projetoId") Long projetoId);
 }

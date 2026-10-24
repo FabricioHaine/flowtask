@@ -47,6 +47,16 @@ export function podeExcluirTarefa(papel: Papel | null | undefined): boolean {
   return papel === 'OWNER';
 }
 
+/** Excluir o projeto e todo o conteúdo dele: ação reservada ao OWNER. */
+export function podeExcluirProjeto(papel: Papel | null | undefined): boolean {
+  return papel === 'OWNER';
+}
+
+/** Editar nome/descrição/datas do projeto: somente o OWNER. */
+export function podeEditarProjeto(papel: Papel | null | undefined): boolean {
+  return papel === 'OWNER';
+}
+
 /** Comentar: qualquer integrante autenticado do projeto. */
 export function podeComentar(papel: Papel | null | undefined): boolean {
   return papel !== null && papel !== undefined;

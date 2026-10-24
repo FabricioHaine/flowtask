@@ -1,6 +1,7 @@
-/** Projeto & equipe: config, integrantes, convites, colunas, etiquetas e histórico. */
+/** Projeto & equipe: configuração, integrantes, convites, colunas, etiquetas
+ * e histórico. Ações destrutivas pedem confirmação em modal (sem prompt nativo). */
 
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
@@ -13,8 +14,15 @@ import {
 import { podeConvidar, podeGerenciarMembros, podeGerenciarQuadro, podeGerenciarTarefas } from '../core/permissoes';
 import { ServicoToast, mensagemDeErro } from '../core/toast.service';
 import {
-  ROTULO_ESTADO, ROTULO_PAPEL, classeEstado, formatarDataHora, iniciais,
+  ROTULO_ESTADO, ROTULO_PAPEL, classeEstado, formatarDataHora, iniciais, iconeAtividade, tonoAtividade,
 } from '../core/utilidades';
+
+interface Confirmacao {
+  titulo: string;
+  texto: string;
+  botao: string;
+  acao: () => void;
+}
 
 @Component({
   selector: 'app-tela-equipe',
@@ -24,23 +32,37 @@ import {
     <div class="pagina">
       <div class="cabeca-pagina">
         <div>
-          <a class="voltar" [routerLink]="['/projetos', projetoId]">← Voltar ao quadro</a>
-          <h1>@if (projeto(); as p) { {{ p.nome }} } @else { Projeto & equipe }</h1>
+          <a class="btn ghost sm" [routerLink]="['/projetos', projetoId]">
+            <i class="pi pi-angle-left"></i> Voltar ao quadro
+          </a>
+          <div style="margin-top: 10px;" class="linha-titulo-projeto">
+            <h1 class="titulo-pagina">@if (projeto(); as p) { {{ p.nome }} } @else { Projeto & equipe }</h1>
+            @if (projeto(); as p) {
+              <span class="badge" [class]="classeEstado_(p.estado)">{{ ROTULO_ESTADO_[p.estado] }}</span>
+              <span class="badge" [class]="papelClasse_(p.papelUsuario)">{{ ROTULO_PAPEL_[p.papelUsuario] }}</span>
+            }
+          </div>
         </div>
       </div>
 
       @if (carregando()) {
-        <p class="mensagem-info">Carregando…</p>
+        <div class="grade-config" aria-hidden="true">
+          <div class="painel-config card">
+            <div class="sk sk-linha gorda" style="width: 30%;"></div>
+            @for (f of [1, 2, 3]; track f) {<div class="sk sk-linha"></div>}
+          </div>
+          <div class="painel-config card">
+            <div class="sk sk-linha gorda" style="width: 40%;"></div>
+            @for (f of [1, 2, 3]; track f) {<div class="sk sk-linha"></div>}
+          </div>
+        </div>
       } @else {
-        <div class="grade-equipe">
+        <div class="grade-config">
 
-          <!-- ===================== dados do projeto ===================== -->
-          <section class="partSPA card">
-            <h2>Projeto</h2>
+          <!-- ============================== projeto ============================== -->
+          <section class="painel-config card">
+            <div class="cabeca-painel"><i class="pi pi-cog"></i><h2>Projeto</h2></div>
             @if (projeto(); as p) {
-              <div class="estado-atual">
-                <span class="badge" [class]="classeEstado_(p.estado)">{{ ROTULO_ESTADO_[p.estado] }}</span>
-              </div>
               <label class="campo">
                 Nome
                 <input class="input" [(ngModel)]="form_nome" name="form_nome" maxlength="140" [disabled]="!ehOwner()">
@@ -69,9 +91,11 @@ import {
                     }
                   </select>
                 </label>
-                <div class="acoes">
-                  <button class="btn" type="button" (click)="salvarProjeto()" [disabled]="salvando()">Salvar dados</button>
-                  <button class="btn ghost" type="button" (click)="salvarEstado()">Aplicar estado</button>
+                <div class="acoes" style="justify-content: flex-start;">
+                  <button class="btn" type="button" (click)="salvarProjeto()" [disabled]="salvando()"
+                          [class.carregando]="salvando()">Salvar dados</button>
+                  <button class="btn soft" type="button" (click)="salvarEstado()"
+                          [disabled]="form_estado === p.estado">Aplicar estado</button>
                 </div>
               } @else {
                 <p class="mensagem-info">Apenas o Proprietário altera os dados do projeto.</p>
@@ -79,13 +103,13 @@ import {
             }
           </section>
 
-          <!-- ===================== integrantes ===================== -->
-          <section class="partSPA card">
-            <h2>Integrantes ({{ membros().length }})</h2>
+          <!-- ============================ integrantes ============================ -->
+          <section class="painel-config card">
+            <div class="cabeca-painel"><i class="pi pi-users"></i><h2>Integrantes ({{ membros().length }})</h2></div>
             @for (m of membros(); track m.id) {
-              <div class="linha-membro">
+              <div class="linha-item">
                 <span class="avatar" [title]="m.usuario.email">{{ iniciais_(m.usuario.nome) }}</span>
-                <div class="quem-escreve">
+                <div class="quem-item">
                   <b>{{ m.usuario.nome }} @if (m.usuario.id === meuId()) { <span class="badge neutro">você</span> }</b>
                   <small>{{ m.usuario.email }}</small>
                 </div>
@@ -93,147 +117,225 @@ import {
                   @if (!podeMembros()) {
                     <span class="badge" [class]="papelClasse_(m.funcao)">{{ ROTULO_PAPEL_[m.funcao] }}</span>
                   } @else if (m.funcao === 'OWNER') {
-                    <span class="badge owner">{{ ROTULO_PAPEL_[m.funcao] }}</span>
+                    <span class="badge owner"><i class="pi pi-crown"></i> Proprietário</span>
                   } @else {
                     <select class="input select-funcao" [ngModel]="m.funcao" (ngModelChange)="mudarFuncao(m, $event)"
-                            name="funcao-{{ m.id }}">
+                            name="funcao-{{ m.id }}" aria-label="Função de {{ m.usuario.nome }}">
                       @for (p of papeisComGente; track p) {
                         <option [ngValue]="p">{{ ROTULO_PAPEL_[p] }}</option>
                       }
                     </select>
-                    <button class="btn danger sm" type="button" (click)="removerMembro(m)">Remover</button>
+                    <button class="btn perigo sm" type="button" (click)="pedirRemoverMembro(m)">
+                      <i class="pi pi-user-minus"></i> Remover
+                    </button>
                   }
                 </span>
               </div>
             }
-            <p class="mensagem-info">
+            <small class="mensagem-info">
               Definir a função de alguém como Proprietário transfere a posse do projeto.
-            </p>
+            </small>
           </section>
 
-          <!-- ===================== convites ===================== -->
-          <section class="partSPA card">
-            <h2>Convites</h2>
+          <!-- ============================== convites ============================== -->
+          <section class="painel-config card">
+            <div class="cabeca-painel"><i class="pi pi-envelope"></i><h2>Convites</h2></div>
             @if (podeConvidar_(papel())) {
-              <div class="novo-convite">
+              <div class="nova-linha">
                 <input class="input" [(ngModel)]="novoConviteEmail" name="novoConviteEmail" type="email"
-                       placeholder="e-mail da pessoa que você quer convidar">
-                <select class="input" [(ngModel)]="novoConviteFuncao" name="novoConviteFuncao">
+                       placeholder="e-mail da pessoa que você quer convidar" (keydown.enter)="criarConvite()">
+                <select class="input" style="width: 130px;" [(ngModel)]="novoConviteFuncao" name="novoConviteFuncao"
+                        aria-label="Função proposta">
                   <option value="MEMBER">Membro</option>
                   <option value="MANAGER">Gerente</option>
                 </select>
-                <button class="btn" type="button" (click)="criarConvite()" [disabled]="salvando()">Convidar</button>
+                <button class="btn" type="button" (click)="criarConvite()" [disabled]="salvando()">
+                  <i class="pi pi-user-plus"></i> Convidar
+                </button>
               </div>
               @if (convites().length === 0) {
                 <p class="mensagem-info">Nenhum convite ainda.</p>
               }
               @for (c of convites(); track c.id) {
-                <div class="linha-convite">
-                  <div class="quem-escreve">
+                <div class="linha-item" [class.desligada]="c.estado !== 'PENDENTE'">
+                  <span class="avatar sm"><i class="pi pi-user"></i></span>
+                  <div class="quem-item">
                     <b>{{ c.email }}</b>
                     <small>{{ contagem_(c) }}</small>
                   </div>
                   <span class="fim-linha">
                     <span class="badge" [class]="classeEstadoConvite_(c)">{{ ROTULO_ESTADO_CONVITE_[c.estado] }}</span>
                     @if (c.estado === 'PENDENTE' && (ehOwner() || c.criadoPor?.id === meuId())) {
-                      <button class="btn ghost sm" type="button" (click)="cancelarConvite(c)">Cancelar</button>
+                      <button class="gv perigo" type="button" (click)="pedirCancelarConvite(c)">cancelar</button>
                     }
                   </span>
                 </div>
               }
               <small class="mensagem-info">
-                A pessoa recebe o convite dentro do próprio FlowTask (na tela de Notificações) e precisa de conta
-                com o e-mail convidado.
+                A pessoa recebe o convite em <b>Notificações</b> e precisa de conta com o e-mail convidado.
               </small>
             } @else {
               <p class="mensagem-info">Somente Gerente ou Proprietário gerenciam convites.</p>
             }
           </section>
 
-          <!-- ===================== colunas do quadro ===================== -->
+          <!-- ============================ colunas do quadro ============================ -->
           @if (podeQuadro()) {
-            <section class="partSPA card">
-              <h2>Colunas do quadro</h2>
-              <div class="nova-coluna">
-                <input class="input" [(ngModel)]="novaColunaNome" name="novaColunaNome" placeholder="Nova coluna…"
-                       maxlength="80">
-                <button class="btn sm" type="button" (click)="criarColuna()">Criar</button>
+            <section class="painel-config card">
+              <div class="cabeca-painel"><i class="pi pi-objects-column"></i><h2>Colunas do quadro</h2></div>
+              <div class="nova-linha">
+                <input class="input" [(ngModel)]="novaColunaNome" name="novaColunaNome" placeholder="Nome da nova coluna…"
+                       maxlength="80" (keydown.enter)="criarColuna()">
+                <button class="btn sm" type="button" (click)="criarColuna()"><i class="pi pi-plus"></i> Criar</button>
               </div>
               @for (c of colunas(); track c.id) {
-                <div class="linha-coluna" [class.desligada]="!c.ativa">
+                <div class="linha-item" [class.desligada]="!c.ativa">
                   <span class="ordem-mov">
-                    <button class="gv" type="button" (click)="subirColuna(c)" [disabled]="c.ordem === 0">▲</button>
-                    <button class="gv" type="button" (click)="descerColuna(c)" [disabled]="c === colunas()[colunas().length - 1]">▼</button>
+                    <button class="gv" type="button" (click)="subirColuna(c)" [disabled]="c.ordem === 0"
+                            aria-label="Subir coluna" title="Subir"><i class="pi pi-angle-up"></i></button>
+                    <button class="gv" type="button" (click)="descerColuna(c)"
+                            [disabled]="c === colunas()[colunas().length - 1]"
+                            aria-label="Descer coluna" title="Descer"><i class="pi pi-angle-down"></i></button>
                   </span>
-                  <div class="quem-escreve">
-                    <b>{{ c.nome }}</b>
-                    <small>
-                      {{ c.tarefas.length }} tarefas
-                      @if (c.colunaConclusao) { · coluna de conclusão }
-                      @if (!c.ativa) { · arquivada }
-                    </small>
+                  <div class="quem-item">
+                    <b>
+                      {{ c.nome }}
+                      @if (!c.ativa) {<span class="badge neutro">arquivada</span>}
+                    </b>
+                    <small>{{ c.tarefas.length }} tarefa(s)</small>
                   </div>
                   <span class="fim-linha">
                     @if (c.colunaConclusao) {
-                      <span class="badge sucesso">✓ conclusão</span>
+                      <span class="badge sucesso"><i class="pi pi-check"></i> conclusão</span>
                     } @else {
-                      <button class="btn soft sm" type="button" (click)="marcarConclusao(c)">Marcar como conclusão</button>
+                      <button class="gv" type="button" (click)="marcarConclusao(c)" title="Marcar como conclusão">
+                        conclusão
+                      </button>
                     }
-                    <button class="btn ghost sm" type="button" (click)="renomearColuna(c)">Renomear</button>
-                    <button class="btn ghost sm" type="button" (click)="arquivarColuna(c)">
-                      {{ c.ativa ? 'Arquivar' : 'Restaurar' }}
+                    <button class="gv" type="button" (click)="abrirRenomearColuna(c)">renomear</button>
+                    <button class="gv" type="button" (click)="arquivarColuna(c)">
+                      {{ c.ativa ? 'arquivar' : 'restaurar' }}
                     </button>
-                    <button class="btn danger sm" type="button" (click)="excluirColuna(c)">Excluir</button>
+                    <button class="gv perigo" type="button" (click)="pedirExcluirColuna(c)">excluir</button>
                   </span>
                 </div>
               }
-              <small class="mensagem-info">Renomeie para reativar a sinalização de conclusão (uma coluna por projeto).</small>
+              <small class="mensagem-info">Use "conclusão" para sinalizar a coluna onde as tarefas terminam (uma por projeto).</small>
             </section>
           }
 
-          <!-- ===================== etiquetas ===================== -->
+          <!-- ============================== etiquetas ============================== -->
           @if (podeTarefas()) {
-            <section class="partSPA card">
-              <h2>Etiquetas ({{ etiquetas().length }})</h2>
-              <div class="nova-etiqueta">
-                <input class="input" [(ngModel)]="novaEtiquetaNome" name="novaEtiquetaNome" placeholder="Nova etiqueta…"
-                       maxlength="40">
-                <input class="input cor" type="color" [(ngModel)]="novaEtiquetaCor" name="novaEtiquetaCor">
-                <button class="btn sm" type="button" (click)="criarEtiqueta()">Criar</button>
+            <section class="painel-config card">
+              <div class="cabeca-painel"><i class="pi pi-bookmark"></i><h2>Etiquetas ({{ etiquetas().length }})</h2></div>
+              <div class="nova-linha">
+                <input class="input" [(ngModel)]="novaEtiquetaNome" name="novaEtiquetaNome" placeholder="Nome da etiqueta…"
+                       maxlength="40" (keydown.enter)="criarEtiqueta()">
+                <input class="input cor" type="color" [(ngModel)]="novaEtiquetaCor" name="novaEtiquetaCor"
+                       aria-label="Cor da etiqueta">
+                <button class="btn sm" type="button" (click)="criarEtiqueta()"><i class="pi pi-plus"></i> Criar</button>
               </div>
               @if (etiquetas().length === 0) {
-                <p class="mensagem-info">Nenhuma etiqueta.</p>
+                <p class="mensagem-info">Nenhuma etiqueta ainda — crie a primeira para agrupar tarefas.</p>
               }
               @for (e of etiquetas(); track e.id) {
-                <div class="linha-etiqueta">
+                <div class="linha-item">
                   <span class="pill-etiqueta"><i class="dot" [style.background]="e.cor"></i>{{ e.nome }}</span>
+                  <span class="esp"></span>
                   <span class="fim-linha">
-                    <button class="btn ghost sm" type="button" (click)="editarEtiqueta(e)">Editar</button>
-                    <button class="btn danger sm" type="button" (click)="excluirEtiqueta(e)">Excluir</button>
+                    <span class="avatar sm" [style.background]="e.cor" [style.border-color]="e.cor"></span>
+                    <button class="gv" type="button" (click)="abrirEditarEtiqueta(e)">editar</button>
+                    <button class="gv perigo" type="button" (click)="pedirExcluirEtiqueta(e)">excluir</button>
                   </span>
                 </div>
               }
             </section>
           }
 
-          <!-- ===================== histórico ===================== -->
-          <section class="partSPA card span-2">
-            <h2>Histórico do projeto</h2>
+          <!-- ============================== histórico ============================== -->
+          <section class="painel-config card span-2">
+            <div class="cabeca-painel"><i class="pi pi-history"></i><h2>Histórico do projeto</h2></div>
             @if (atividades().length === 0) {
-              <p class="mensagem-info">Nenhuma atividade registrada.</p>
+              <div class="vazio" style="padding: 26px;">
+                <span class="ic-vazio"><i class="pi pi-history"></i></span>
+                <h3>Sem registro de atividades</h3>
+                <p>Quando o time mexer no projeto, o histórico aparece aqui.</p>
+              </div>
             }
             @for (a of atividades(); track a.id) {
-              <p class="linha-atividade">
-                <small>{{ datahora_(a.criadoEm) }} · <b>{{ a.usuario?.nome ?? 'Sistema' }}</b> — {{ a.resumo }}</small>
-              </p>
+              <div class="linha-item" style="align-items: flex-start;">
+                <span class="ativ-ic {{ tono_(a.tipo) }}"><i class="pi {{ icone_(a.tipo) }}"></i></span>
+                <span class="txt-ativ" style="flex: 1; font-size: 12.5px; color: var(--ft-text-2); line-height: 1.5;">
+                  <b style="color: var(--ft-text);">{{ a.usuario?.nome ?? 'Sistema' }}</b> — {{ a.resumo }}
+                </span>
+                <small class="quando" style="color: var(--ft-text-3); font-size: 11px; white-space: nowrap;">{{ datahora_(a.criadoEm) }}</small>
+              </div>
             }
             @if (totalAtividades() > atividades().length) {
-              <button class="btn ghost sm" type="button" (click)="maisAtividades()">Carregar mais</button>
+              <button class="btn ghost" type="button" (click)="maisAtividades()">
+                <i class="pi pi-angle-down"></i> Carregar mais ({{ totalAtividades() - atividades().length }})
+              </button>
             }
           </section>
         </div>
       }
+
+      <!-- confirmação genérica -->
+      @if (confirmacao(); as c) {
+        <div class="sombra" (click)="fecharConfirmacao()">
+          <div class="modal pequeno" (click)="$event.stopPropagation()">
+            <div class="cabeca-modal">
+              <h2><i class="pi pi-exclamation-triangle ic-aviso"></i> {{ c.titulo }}</h2>
+              <button class="btn ghost ic sm" type="button" (click)="fecharConfirmacao()" aria-label="Fechar">
+                <i class="pi pi-times"></i>
+              </button>
+            </div>
+            <p class="mensagem-info">{{ c.texto }}</p>
+            <div class="acoes">
+              <button class="btn ghost" type="button" (click)="fecharConfirmacao()">Cancelar</button>
+              <button class="btn perigo-solido" type="button" (click)="executarConfirmacao()">{{ c.botao }}</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- modal de texto (renomear coluna / editar etiqueta) -->
+      @if (modal(); as m) {
+        <div class="sombra" (click)="fecharModal()">
+          <div class="modal pequeno" (click)="$event.stopPropagation()">
+            <div class="cabeca-modal">
+              <h2>{{ m.titulo }}</h2>
+              <button class="btn ghost ic sm" type="button" (click)="fecharModal()" aria-label="Fechar">
+                <i class="pi pi-times"></i>
+              </button>
+            </div>
+            <label class="campo">
+              {{ m.campo }}
+              <input class="input" [(ngModel)]="valorModal" name="valorModal" (keydown.enter)="salvarModal()"
+                     maxlength="40">
+            </label>
+            @if (m.comCor) {
+              <label class="campo">
+                Cor
+                <input class="input cor" type="color" [(ngModel)]="corModal" name="corModal">
+              </label>
+            }
+            <div class="acoes">
+              <button class="btn ghost" type="button" (click)="fecharModal()">Cancelar</button>
+              <button class="btn" type="button" (click)="salvarModal()">{{ m.botao }}</button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
+  `,
+  styles: `
+    .cabeca-painel { display: flex; align-items: center; gap: 8px;
+      h2 { flex: 1; } i.pi { color: var(--ft-text-3); font-size: 14px; } }
+    .ic-aviso { color: var(--ft-warning); font-size: 15px; margin-right: 7px; }
+    .linha-titulo-projeto { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .quando { flex-shrink: 0; padding-top: 4px; }
+    .txt-ativ b { color: var(--ft-text); }
   `,
 })
 export class TelaEquipe implements OnInit {
@@ -271,6 +373,14 @@ export class TelaEquipe implements OnInit {
   novaColunaNome = '';
   novaEtiquetaNome = '';
   novaEtiquetaCor = '#8293FF';
+
+  // confirmação destrutiva genérica
+  readonly confirmacao = signal<Confirmacao | null>(null);
+
+  // modal de texto (renomear coluna / editar etiqueta)
+  readonly modal = signal<{ titulo: string; campo: string; botao: string; comCor: boolean; acao: (valor: string, cor: string) => void } | null>(null);
+  valorModal = '';
+  corModal = '#8293FF';
 
   pagAtividades = 0;
   totalAtividades_ = 0;
@@ -336,6 +446,22 @@ export class TelaEquipe implements OnInit {
   maisAtividades(): void {
     this.pagAtividades += 1;
     this.carregarAtividades(this.pagAtividades);
+  }
+
+  // ------------------------------------------------------------ confirmação
+
+  private pedirConfirmacao(c: Confirmacao): void {
+    this.confirmacao.set(c);
+  }
+
+  fecharConfirmacao(): void {
+    this.confirmacao.set(null);
+  }
+
+  executarConfirmacao(): void {
+    const c = this.confirmacao();
+    this.confirmacao.set(null);
+    c?.acao();
   }
 
   // ------------------------------------------------------------ projeto
@@ -428,11 +554,17 @@ export class TelaEquipe implements OnInit {
     });
   }
 
-  removerMembro(m: RespostaMembro): void {
-    if (!window.confirm(`Remover ${m.usuario.nome} do projeto?`)) {
-      return;
-    }
-    this.api.removerMembro(this.projetoId, m.id).subscribe({
+  pedirRemoverMembro(m: RespostaMembro): void {
+    this.pedirConfirmacao({
+      titulo: 'Remover integrante',
+      texto: `${m.usuario.nome} perde o acesso a este projeto e às tarefas dele. O histórico das ações dele permanece no projeto.`,
+      botao: 'Remover do projeto',
+      acao: () => this.removerMembro(m.id),
+    });
+  }
+
+  private removerMembro(membroId: number): void {
+    this.api.removerMembro(this.projetoId, membroId).subscribe({
       next: () => {
         this.toast.sucesso('Integrante removido.');
         this.carregar();
@@ -464,15 +596,21 @@ export class TelaEquipe implements OnInit {
     });
   }
 
-  cancelarConvite(c: Convite): void {
-    if (!window.confirm(`Cancelar o convite para ${c.email}?`)) {
-      return;
-    }
-    this.api.cancelarConvite(this.projetoId, c.id).subscribe({
+  pedirCancelarConvite(c: Convite): void {
+    this.pedirConfirmacao({
+      titulo: 'Cancelar convite',
+      texto: `O convite para ${c.email} deixa de ser válido — a pessoa não consegue mais aceitá-lo.`,
+      botao: 'Cancelar convite',
+      acao: () => this.cancelarConvite(c.id),
+    });
+  }
+
+  private cancelarConvite(conviteId: number): void {
+    this.api.cancelarConvite(this.projetoId, conviteId).subscribe({
       next: () => {
         this.toast.sucesso('Convite cancelado.');
         this.convites.set(this.convites().map(x =>
-          x.id === c.id ? { ...x, estado: 'CANCELADO' } : x));
+          x.id === conviteId ? { ...x, estado: 'CANCELADO' } : x));
       },
       error: erro => this.toast.erro(mensagemDeErro(erro)),
     });
@@ -504,26 +642,39 @@ export class TelaEquipe implements OnInit {
       this.toast.erro('O nome da coluna deve ter de 2 a 80 caracteres.');
       return;
     }
+    this.salvando.set(true);
     this.api.criarColuna(this.projetoId, nome).subscribe({
       next: () => {
+        this.salvando.set(false);
         this.novaColunaNome = '';
         this.toast.sucesso('Coluna criada.');
         this.refrescarColunas();
       },
-      error: erro => this.toast.erro(mensagemDeErro(erro)),
+      error: erro => {
+        this.salvando.set(false);
+        this.toast.erro(mensagemDeErro(erro));
+      },
     });
   }
 
-  renomearColuna(c: ColunaQuadro): void {
-    const bruto = window.prompt('Novo nome da coluna:', c.nome);
-    if (bruto === null) {
+  abrirRenomearColuna(c: ColunaQuadro): void {
+    this.valorModal = c.nome;
+    this.modal.set({
+      titulo: 'Renomear coluna',
+      campo: 'Novo nome',
+      botao: 'Salvar',
+      comCor: false,
+      acao: valor => this.renomearColuna(c.id, valor),
+    });
+  }
+
+  private renomearColuna(colunaId: number, nome: string): void {
+    const limpa = nome.trim();
+    if (limpa.length < 2) {
+      this.toast.erro('O nome da coluna deve ter de 2 a 80 caracteres.');
       return;
     }
-    const nome = bruto.trim();
-    if (nome.length < 2 || nome === c.nome) {
-      return;
-    }
-    this.api.atualizarColuna(this.projetoId, c.id, { nome }).subscribe({
+    this.api.atualizarColuna(this.projetoId, colunaId, { nome: limpa }).subscribe({
       next: () => {
         this.toast.sucesso('Coluna renomeada.');
         this.refrescarColunas();
@@ -575,13 +726,22 @@ export class TelaEquipe implements OnInit {
     });
   }
 
-  excluirColuna(c: ColunaQuadro): void {
-    if (!window.confirm(`Excluir a coluna "${c.nome}"? Ela precisa estar vazia.`)) {
-      return;
-    }
-    this.api.excluirColuna(this.projetoId, c.id).subscribe({
+  pedirExcluirColuna(c: ColunaQuadro): void {
+    const vazia = c.tarefas.length === 0 && c.ativa;
+    this.pedirConfirmacao({
+      titulo: 'Excluir coluna',
+      texto: vazia
+        ? `A coluna "${c.nome}" será excluída do quadro. A ação não pode ser desfeita.`
+        : `A coluna "${c.nome}" tem ${c.tarefas.length} tarefa(s) — o backend só exclui colunas vazias. ${c.ativa ? 'Mova ou arquive as tarefas primeiro.' : 'Restaure a coluna e esvazie-a antes.'}`,
+      botao: vazia ? 'Excluir coluna' : 'Tentar mesmo assim',
+      acao: () => this.excluirColuna(c.id, c.nome),
+    });
+  }
+
+  private excluirColuna(colunaId: number, nome: string): void {
+    this.api.excluirColuna(this.projetoId, colunaId).subscribe({
       next: () => {
-        this.toast.sucesso('Coluna excluída.');
+        this.toast.sucesso(`Coluna "${nome}" excluída.`);
         this.refrescarColunas();
       },
       error: erro => this.toast.erro(mensagemDeErro(erro)),
@@ -613,33 +773,47 @@ export class TelaEquipe implements OnInit {
     });
   }
 
-  editarEtiqueta(e: Etiqueta): void {
-    const nome = window.prompt('Novo nome da etiqueta:', e.nome);
-    if (nome === null) {
-      return;
-    }
-    const cor = window.prompt('Nova cor (#RRGGBB):', e.cor) ?? e.cor;
+  abrirEditarEtiqueta(e: Etiqueta): void {
+    this.valorModal = e.nome;
+    this.corModal = e.cor;
+    this.modal.set({
+      titulo: 'Editar etiqueta',
+      campo: 'Nome',
+      botao: 'Salvar etiqueta',
+      comCor: true,
+      acao: (valor, cor) => this.salvarEdicaoEtiqueta(e.id, valor, cor),
+    });
+  }
+
+  private salvarEdicaoEtiqueta(etiquetaId: number, nome: string, cor: string): void {
     const limpa = nome.trim();
     if (limpa.length < 2) {
+      this.toast.erro('O nome da etiqueta deve ter de 2 a 40 caracteres.');
       return;
     }
-    this.api.editarEtiqueta(this.projetoId, e.id, { nome: limpa, cor }).subscribe({
+    this.api.editarEtiqueta(this.projetoId, etiquetaId, { nome: limpa, cor }).subscribe({
       next: () => {
-        this.refrescarEtiquetas();
         this.toast.sucesso('Etiqueta atualizada.');
+        this.refrescarEtiquetas();
       },
       error: erro => this.toast.erro(mensagemDeErro(erro)),
     });
   }
 
-  excluirEtiqueta(e: Etiqueta): void {
-    if (!window.confirm(`Excluir a etiqueta "${e.nome}"? Ela sai das tarefas onde está ligada.`)) {
-      return;
-    }
-    this.api.excluirEtiqueta(this.projetoId, e.id).subscribe({
+  pedirExcluirEtiqueta(e: Etiqueta): void {
+    this.pedirConfirmacao({
+      titulo: 'Excluir etiqueta',
+      texto: `"${e.nome}" será apagada e sai automaticamente das tarefas onde está ligada.`,
+      botao: 'Excluir etiqueta',
+      acao: () => this.excluirEtiqueta(e.id, e.nome),
+    });
+  }
+
+  private excluirEtiqueta(etiquetaId: number, nome: string): void {
+    this.api.excluirEtiqueta(this.projetoId, etiquetaId).subscribe({
       next: () => {
+        this.toast.sucesso(`Etiqueta "${nome}" excluída.`);
         this.refrescarEtiquetas();
-        this.toast.sucesso('Etiqueta excluída.');
       },
       error: erro => this.toast.erro(mensagemDeErro(erro)),
     });
@@ -652,7 +826,30 @@ export class TelaEquipe implements OnInit {
     });
   }
 
+  // ------------------------------------------------------------ modal de texto
+
+  fecharModal(): void {
+    this.modal.set(null);
+  }
+
+  salvarModal(): void {
+    const m = this.modal();
+    if (m === null) {
+      return;
+    }
+    this.modal.set(null);
+    m.acao(this.valorModal, this.corModal);
+  }
+
   // ------------------------------------------------------------ helpers
+
+  icone_(tipo: string): string {
+    return iconeAtividade(tipo);
+  }
+
+  tono_(tipo: string): string {
+    return tonoAtividade(tipo);
+  }
 
   totalAtividades(): number {
     return this.totalAtividades_;
@@ -672,5 +869,16 @@ export class TelaEquipe implements OnInit {
 
   datahora_(iso: string | null): string {
     return formatarDataHora(iso);
+  }
+
+  @HostListener('document:keydown.escape')
+  noEscape(): void {
+    if (this.confirmacao()) {
+      this.fecharConfirmacao();
+      return;
+    }
+    if (this.modal()) {
+      this.fecharModal();
+    }
   }
 }

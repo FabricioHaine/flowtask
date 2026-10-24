@@ -1,13 +1,14 @@
-/** Tarefas atribuídas ao usuário em todos os projetos. */
+/** Tarefas atribuídas ao usuário em todos os projetos: central de trabalho
+ * com filtros locais, prazos destacados e contagem de comentários. */
 
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 
 import { ApiServico } from '../core/api';
 import { Prioridade, Tarefa } from '../core/models';
 import { ServicoToast, mensagemDeErro } from '../core/toast.service';
-import { ROTULO_PRIORIDADE, classePrioridade, diasRestantes, formatarDataLocal, iniciais } from '../core/utilidades';
+import { ROTULO_PRIORIDADE, classePrioridade, diasRestantes, formatarDataLocal } from '../core/utilidades';
 
 @Component({
   selector: 'app-tela-minhas-tarefas',
@@ -16,40 +17,93 @@ import { ROTULO_PRIORIDADE, classePrioridade, diasRestantes, formatarDataLocal, 
   template: `
     <div class="pagina">
       <div class="cabeca-pagina">
-        <h1>Minhas tarefas</h1>
-        <button class="btn ghost sm" type="button" (click)="carregar()">Atualizar</button>
+        <div>
+          <h1 class="titulo-pagina">Minhas tarefas</h1>
+          <p class="descricao-pagina">Tudo que está na bandeja das suas mãos, em todos os projetos.</p>
+        </div>
+        <div class="acoes-cab">
+          <button class="btn ghost" type="button" (click)="carregar()">
+            <i class="pi pi-refresh"></i> Atualizar
+          </button>
+        </div>
       </div>
 
-      <div class="linha-filtros card">
-        <input class="input busca" placeholder="Filtrar por título…" [(ngModel)]="filtroTexto" name="filtroTexto">
-        <select class="input estado" [(ngModel)]="filtroPrioridade" name="filtroPrioridade">
+      <div class="barra-filtros">
+        <div class="busca">
+          <i class="pi pi-search"></i>
+          <input class="input" placeholder="Filtrar por título…" [(ngModel)]="filtroTexto"
+                 name="filtroTexto" (ngModelChange)="remontar()">
+        </div>
+        <select class="input seletor" [(ngModel)]="filtroPrioridade" name="filtroPrioridade"
+                (ngModelChange)="remontar()" aria-label="Filtrar por prioridade">
           <option [ngValue]="null">Todas as prioridades</option>
           @for (p of prioridades; track p) {
             <option [ngValue]="p">{{ ROTULO_PRIORIDADE_[p] }}</option>
           }
         </select>
-        <label class="campo horizontal apenas-um">
-          <input type="checkbox" [(ngModel)]="ocultarConcluidas" name="ocultarConcluidas" (ngModelChange)="remontar()">
+        <label class="apenas-um">
+          <input type="checkbox" [(ngModel)]="ocultarConcluidas" name="ocultarConcluidas"
+                 (ngModelChange)="remontar()">
           Ocultar concluídas
         </label>
+        <span class="esp"></span>
+        @if (visiveis().length !== tarefas().length) {
+          <span class="texto-diminuto">{{ visiveis().length }} de {{ tarefas().length }} tarefa(s)</span>
+        }
       </div>
 
       @if (carregando()) {
-        <p class="mensagem-info">Carregando tarefas…</p>
+        <div class="grade-tarefas-minhas" aria-hidden="true">
+          @for (f of [1, 2, 3, 4, 5, 6]; track f) {
+            <div class="tarefa-minha card">
+              <div class="sk sk-linha gorda" style="width: 60%;"></div>
+              <div class="sk sk-linha" style="width: 40%;"></div>
+              <div class="sk sk-linha" style="width: 80%;"></div>
+            </div>
+          }
+        </div>
+      } @else if (erroCarregamento()) {
+        <div class="vazio">
+          <span class="ic-vazio"><i class="pi pi-exclamation-triangle"></i></span>
+          <h3>Não foi possível carregar as tarefas</h3>
+          <p>{{ erroCarregamento() }}</p>
+          <div class="acoes-vazio">
+            <button class="btn soft" type="button" (click)="carregar()">
+              <i class="pi pi-refresh"></i> Tentar de novo
+            </button>
+          </div>
+        </div>
+      } @else if (tarefas().length === 0) {
+        <div class="vazio">
+          <span class="ic-vazio"><i class="pi pi-check-square"></i></span>
+          <h3>Sua bandeja está vazia</h3>
+          <p>Quando alguém atribuir uma tarefa à sua conta — ou você assumir uma — ela aparece aqui.</p>
+          <div class="acoes-vazio">
+            <a class="btn soft" routerLink="/projetos">
+              <i class="pi pi-objects-column"></i> Ir para os projetos
+            </a>
+          </div>
+        </div>
       } @else if (visiveis().length === 0) {
-        <div class="vazio card">
-          <h3>Nenhuma tarefa atribuída a você</h3>
-          <p class="mensagem-info">Quando alguém atribuir uma tarefa à sua conta, ela aparece aqui.</p>
+        <div class="vazio">
+          <span class="ic-vazio"><i class="pi pi-filter-slash"></i></span>
+          <h3>Nada com esses filtros</h3>
+          <p>Ajuste a busca, prioridade ou opção de concluídas.</p>
+          <div class="acoes-vazio">
+            <button class="btn ghost" type="button" (click)="limparFiltros()">
+              <i class="pi pi-filter-slash"></i> Limpar filtros
+            </button>
+          </div>
         </div>
       } @else {
         <div class="grade-tarefas-minhas">
           @for (t of visiveis(); track t.id) {
-            <a class="card tarefa-minha" [routerLink]="['/projetos', t.projetoId]"
+            <a class="tarefa-minha card" [routerLink]="['/projetos', t.projetoId]"
                [queryParams]="{ tarefa: t.id }">
               <div class="topo">
                 <b>{{ t.titulo }}</b>
                 @if (t.concluida) {
-                  <span class="badge sucesso">✓</span>
+                  <span class="badge sucesso"><i class="pi pi-check"></i></span>
                 } @else if (t.prioridade) {
                   <span class="badge" [class]="classePrioridade_(t.prioridade)">{{ ROTULO_PRIORIDADE_[t.prioridade] }}</span>
                 }
@@ -62,12 +116,20 @@ import { ROTULO_PRIORIDADE, classePrioridade, diasRestantes, formatarDataLocal, 
                 </div>
               }
               <div class="meta">
-                <small class="mensagem-info">{{ t.projetoNome }} · {{ t.colunaNome }} · 💬 {{ t.totalComentarios }}</small>
+                <span class="de-onde" [title]="t.projetoNome + ' · ' + t.colunaNome">
+                  <i class="pi pi-objects-column"></i>
+                  {{ t.projetoNome }} · {{ t.colunaNome }}
+                  @if (t.totalComentarios > 0) {
+                    · <i class="pi pi-comment"></i> {{ t.totalComentarios }}
+                  }
+                </span>
                 @if (t.prazo !== null) {
-                  <small class="prazo" [class.atrasada]="vencida_(t.prazo) && !t.concluida"
-                         [class.hoje]="dias_(t.prazo) === 0">
-                    {{ formatar_(t.prazo) }}
-                  </small>
+                  <span class="chip-prazo"
+                        [class.atrasada]="vencida_(t.prazo) && !t.concluida"
+                        [class.hoje]="dias_(t.prazo) === 0"
+                        [class.boa]="prazinhoBoa(t.prazo) && !t.concluida">
+                    <i class="pi pi-clock"></i> {{ formatar_(t.prazo) }}
+                  </span>
                 }
               </div>
             </a>
@@ -79,12 +141,12 @@ import { ROTULO_PRIORIDADE, classePrioridade, diasRestantes, formatarDataLocal, 
 })
 export class TelaMinhasTarefas implements OnInit {
   private readonly api = inject(ApiServico);
-  private readonly despachador = inject(Router);
   private readonly toast = inject(ServicoToast);
 
   readonly tarefas = signal<Tarefa[]>([]);
   readonly visiveis = signal<Tarefa[]>([]);
   readonly carregando = signal(true);
+  readonly erroCarregamento = signal<string | null>(null);
 
   readonly prioridades: Prioridade[] = ['BAIXA', 'MEDIA', 'ALTA', 'CRITICA'];
   ROTULO_PRIORIDADE_ = ROTULO_PRIORIDADE;
@@ -99,6 +161,7 @@ export class TelaMinhasTarefas implements OnInit {
 
   carregar(): void {
     this.carregando.set(true);
+    this.erroCarregamento.set(null);
     this.api.minhasTarefas().subscribe({
       next: lista => {
         this.tarefas.set(lista);
@@ -108,9 +171,17 @@ export class TelaMinhasTarefas implements OnInit {
       error: erro => {
         this.tarefas.set([]);
         this.carregando.set(false);
+        this.erroCarregamento.set(mensagemDeErro(erro));
         this.toast.erro(mensagemDeErro(erro));
       },
     });
+  }
+
+  limparFiltros(): void {
+    this.filtroTexto = '';
+    this.filtroPrioridade = null;
+    this.ocultarConcluidas = false;
+    this.remontar();
   }
 
   remontar(): void {
@@ -139,6 +210,12 @@ export class TelaMinhasTarefas implements OnInit {
 
   dias_(prazo: string): number | null {
     return diasRestantes(prazo);
+  }
+
+  /** Prazo nos próximos 3 dias — ainda vira o chip de "boa". */
+  prazinhoBoa(prazo: string): boolean {
+    const dias = diasRestantes(prazo);
+    return dias !== null && dias > 0 && dias <= 3;
   }
 
   classePrioridade_(p: Prioridade): string {

@@ -73,6 +73,11 @@ export class ApiServico {
     return this.http.patch<RespostaProjeto>(`${BASE}/projects/${id}/status`, { estado });
   }
 
+  /** Exclui o projeto e todo o seu conteúdo (somente OWNER; sem retorno). */
+  excluirProjeto(id: number): Observable<void> {
+    return this.http.delete<void>(`${BASE}/projects/${id}`);
+  }
+
   // ------------------------------------------------------------------ quadro / colunas
 
   quadro(projetoId: number): Observable<RespostaQuadro> {

@@ -31,4 +31,9 @@ public interface ConviteRepositorio extends JpaRepository<ConviteProjeto, Long> 
     List<ConviteProjeto> listarPorEmail(@Param("email") String email);
 
     boolean existsByProjetoIdAndEmailIgnoreCaseAndEstado(Long projetoId, String email, com.flowtask.dominio.EstadoConvite estado);
+
+    /** Exclusão em lote dos convites de um projeto (exclusão do projeto). */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("delete from ConviteProjeto c where c.projeto.id = :projetoId")
+    long excluirPorProjeto(@Param("projetoId") Long projetoId);
 }

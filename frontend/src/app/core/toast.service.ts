@@ -2,7 +2,7 @@
 
 import { Injectable, signal } from '@angular/core';
 
-export type TipoToast = 'sucesso' | 'erro' | 'aviso';
+export type TipoToast = 'sucesso' | 'erro' | 'aviso' | 'info';
 
 export interface Toast {
   id: number;
@@ -26,6 +26,10 @@ export class ServicoToast {
 
   aviso(texto: string): void {
     this.adicionar('aviso', texto);
+  }
+
+  info(texto: string): void {
+    this.adicionar('info', texto);
   }
 
   private adicionar(tipo: TipoToast, texto: string): void {
