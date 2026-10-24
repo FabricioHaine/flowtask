@@ -14,10 +14,12 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.flowtask.dto.ErroResposta;
 
@@ -97,6 +99,16 @@ public class TratadorExcecoes {
     public ResponseEntity<ErroResposta> credenciaisSpring(BadCredentialsException e) {
         return ResponseEntity.status(401)
                 .body(ErroResposta.simples(401, "E-mail ou senha inválidos."));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErroResposta> rotaInexistente(NoResourceFoundException e) {
+        return ResponseEntity.status(404).body(ErroResposta.simples(404, "Recurso não encontrado."));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErroResposta> metodoNaoSuportado(HttpRequestMethodNotSupportedException e) {
+        return ResponseEntity.status(405).body(ErroResposta.simples(405, "Método HTTP não suportado para este recurso."));
     }
 
     @ExceptionHandler(Exception.class)
